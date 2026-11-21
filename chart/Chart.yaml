@@ -1,6 +1,10 @@
 apiVersion: v2
-name: lab-service
-description: Helm chart for experimenting with new services in a lab environment
+name: argo-cd-homelab
+description: Argo CD for the homelab (Talos, restricted PSS, Longhorn, Traefik Gateway API, Zitadel OIDC, Forgejo)
 type: application
 version: 0.2.1
-appVersion: "0.2.1"
+appVersion: "v3.6.2"
+dependencies:
+  - name: argo-cd
+    version: 10.18.2
+    repository: https://argoproj.github.io/argo-helm

@@ -4,7 +4,6 @@ chart
 rendered.yaml
 *.log
 .DS_Store
-compose.yml
 mise.toml
 hk.pkl
 README.md

@@ -27,3 +27,6 @@ Thumbs.db
 
 # Helm charts
 rendered.yaml
+chart/charts/
+chart/Chart.lock
+rendered.yaml

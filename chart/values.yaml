@@ -1,43 +1,79 @@
-app:
-  name: lab-service
-  image: nginxinc/nginx-unprivileged
-  tag: alpine
-  pullPolicy: Always
-  replicaCount: 1
-  port: 8080
-  env: "lab"
-  resources:
-    limits:
-      cpu: 250m
-      memory: 256Mi
-  securityContext:
-    allowPrivilegeEscalation: false
-    readOnlyRootFilesystem: false
-    capabilities:
-      drop:
-        - ALL
-  podSecurityContext:
-    runAsNonRoot: true
-    seccompProfile:
-      type: RuntimeDefault
-    fsGroup: 1031
-  tolerations:
-    - key: "node-role.kubernetes.io/control-plane"
-      operator: "Exists"
-      effect: "NoSchedule"
-    - key: "node-role.kubernetes.io/master"
-      operator: "Exists"
-      effect: "NoSchedule"
-
-service:
-  name: lab-service
-  type: ClusterIP
-  port: 8080
-
-ingress:
+httpRoute:
   enabled: true
-  name: lab-ingress
-  host: "test.joeckr.dev" # add your own domain
-  className: "nginx"
-  path: /
-  pathType: "Prefix"
+  host: argo.joeckr.dev
+  gateway:
+    name: traefik-gateway # existing Traefik Gateway
+    namespace: traefik
+    sectionName: "" # optional listener name
+
+# Values below are passed to the upstream argo-cd chart.
+argo-cd:
+  global:
+    domain: argo.joeckr.dev
+    # Restricted Pod Security Standard for every component.
+    securityContext:
+      runAsNonRoot: true
+      seccompProfile:
+        type: RuntimeDefault
+
+  configs:
+    params:
+      # TLS terminates at Cloudflare, so the server speaks plain HTTP.
+      server.insecure: true
+    cm:
+      url: https://argo.joeckr.dev
+      # Local admin is disabled; log in through Zitadel only.
+      admin.enabled: false
+      # PKCE public client: no client secret is stored in the cluster.
+      oidc.config: |
+        name: Zitadel
+        issuer: https://auth.joeckr.dev # replace with your Zitadel issuer
+        clientID: REPLACE_WITH_ZITADEL_CLIENT_ID
+        enablePKCEAuthentication: true
+        requestedScopes:
+          - openid
+          - profile
+          - email
+          - groups
+    rbac:
+      policy.default: role:readonly
+      scopes: "[groups]"
+      # Map a Zitadel role/group claim to Argo CD admin.
+      policy.csv: |
+        g, argocd-admins, role:admin
+
+  controller:
+    containerSecurityContext: &containerSecurityContext
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      runAsNonRoot: true
+      capabilities:
+        drop:
+          - ALL
+      seccompProfile:
+        type: RuntimeDefault
+  server:
+    containerSecurityContext: *containerSecurityContext
+  repoServer:
+    containerSecurityContext: *containerSecurityContext
+  applicationSet:
+    containerSecurityContext: *containerSecurityContext
+  notifications:
+    containerSecurityContext: *containerSecurityContext
+  redis:
+    enabled: false # replaced by redis-ha below
+  dex:
+    enabled: false # Zitadel is used directly via oidc.config
+
+  # Redis HA with a Longhorn-backed volume.
+  redis-ha:
+    enabled: true
+    replicas: 1
+    persistentVolume:
+      enabled: true
+      storageClass: longhorn
+      size: 2Gi
+    containerSecurityContext: *containerSecurityContext
+    haproxy:
+      replicas: 1
+      containerSecurityContext: *containerSecurityContext
